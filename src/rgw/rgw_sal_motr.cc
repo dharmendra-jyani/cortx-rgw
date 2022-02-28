@@ -1827,10 +1827,10 @@ int MotrObject::read_mobj(const DoutPrefixProvider* dpp, int64_t off, int64_t en
 
   left = end - off;
   for (; left > 0; off += actual) {
-    //bs may remain same, and hence this additional check
     if (left < bs)
       bs = this->get_optimal_bs(left);
     actual = bs;
+    //bs may remain same, and hence this additional check
     if (left < bs)
       actual = left;
     ldpp_dout(dpp, 20) << "MotrObject::read_mobj(): off=" << off <<
