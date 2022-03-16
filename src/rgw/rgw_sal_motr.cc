@@ -1844,12 +1844,15 @@ out:
 int MotrObject::read_mobj(const DoutPrefixProvider* dpp, int64_t off, int64_t end, RGWGetDataCB* cb)
 {
   int rc;
-  unsigned bs, actual, left;
+  unsigned bs, actual, left, starting_offset, temp_offset, bs1;
   struct m0_op *op;
   struct m0_bufvec buf;
   struct m0_bufvec attr;
   struct m0_indexvec ext;
 
+  starting_offset = off;
+  temp_offset = starting_offset;
+  off = 0;
   // make end pointer exclusive:
   // it's easier to work with it this way
   end++;
@@ -1866,6 +1869,7 @@ int MotrObject::read_mobj(const DoutPrefixProvider* dpp, int64_t off, int64_t en
   //
   // TODO: We leave proper handling of offset in the future.
   bs = this->get_optimal_bs(end - off);
+  bs1 = bs;
   ldpp_dout(dpp, 20) << "MotrObject::read_mobj(): bs=" << bs << dendl;
 
   rc = m0_bufvec_empty_alloc(&buf, 1) ? :
@@ -1893,6 +1897,8 @@ int MotrObject::read_mobj(const DoutPrefixProvider* dpp, int64_t off, int64_t en
     left -= actual;
     // Read from Motr.
     op = nullptr;
+    if (starting_offset < bs1)
+    {
     rc = m0_obj_op(this->mobj, M0_OC_READ, &ext, &buf, &attr, 0, 0, &op);
     ldpp_dout(dpp, 20) << "MotrObject::read_mobj(): init read op rc=" << rc << dendl;
     if (rc != 0) {
@@ -1910,7 +1916,13 @@ int MotrObject::read_mobj(const DoutPrefixProvider* dpp, int64_t off, int64_t en
     }
     // Call `cb` to process returned data.
     ldpp_dout(dpp, 20) << "MotrObject::read_mobj(): call cb to process data" << dendl;
-    cb->handle_data(bl, 0, actual);
+    cb->handle_data(bl, temp_offset, actual);
+    temp_offset = 0;
+    }
+    else
+    {
+	bs1 += bs;
+    }
   }
 
 out:
