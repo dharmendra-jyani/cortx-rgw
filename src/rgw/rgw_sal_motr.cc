@@ -1851,7 +1851,6 @@ int MotrObject::read_mobj(const DoutPrefixProvider* dpp, int64_t off, int64_t en
   struct m0_indexvec ext;
 
   start = off;
-  bloff = start;
   off = 0;
   // make end pointer exclusive:
   // it's easier to work with it this way
@@ -1866,10 +1865,10 @@ int MotrObject::read_mobj(const DoutPrefixProvider* dpp, int64_t off, int64_t en
   // The optimal size of each IO should also take into account the data
   // transfer size to s3 client. For example, 16MB may be nice to read
   // data from motr, but it could be too big for network transfer.
-  //
-  // TODO: We leave proper handling of offset in the future.
+  
   bs = this->get_optimal_bs(end - off);
-  block_start_off = bs;
+  block_start_off = 0;
+  bloff = 1;
   ldpp_dout(dpp, 20) << "MotrObject::read_mobj(): bs=" << bs << dendl;
 
   rc = m0_bufvec_empty_alloc(&buf, 1) ? :
@@ -1897,11 +1896,14 @@ int MotrObject::read_mobj(const DoutPrefixProvider* dpp, int64_t off, int64_t en
     left -= actual;
     // Read from Motr.
     op = nullptr;
-    if( start > block_start_off )
+    if( start > (block_start_off + bs))
     {
 	block_start_off += bs;
 	continue;
     }
+    if( bloff != 0 )
+	bloff = start - block_start_off;
+
     rc = m0_obj_op(this->mobj, M0_OC_READ, &ext, &buf, &attr, 0, 0, &op);
     ldpp_dout(dpp, 20) << "MotrObject::read_mobj(): init read op rc=" << rc << dendl;
     if (rc != 0) {
