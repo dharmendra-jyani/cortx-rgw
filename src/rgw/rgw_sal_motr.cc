@@ -1851,12 +1851,12 @@ int MotrObject::read_mobj(const DoutPrefixProvider* dpp, int64_t off, int64_t en
   struct m0_indexvec ext;
 
   start = off;
-  off = 0;
   // make end pointer exclusive:
   // it's easier to work with it this way
   end++;
   ldpp_dout(dpp, 20) << "MotrObject::read_mobj(): off=" << off <<
                        " end=" << end << dendl;
+  off = 0;
   // As `off` may not be parity group size aligned, even using optimal
   // buffer block size, simply reading data from offset `off` could come
   // across parity group boundary. And Motr only allows page-size aligned
@@ -1896,9 +1896,10 @@ int MotrObject::read_mobj(const DoutPrefixProvider* dpp, int64_t off, int64_t en
     left -= actual;
     // Read from Motr.
     op = nullptr;
-    if( start > (block_start_off + bs))
+    if( start >= ( block_start_off + bs )) 
     {
 	block_start_off += bs;
+	ldpp_dout(dpp, 70) << "MotrObject::read_mobj(): block_start_off=" << block_start_off <<dendl;
 	continue;
     }
     if( bloff != 0 )
