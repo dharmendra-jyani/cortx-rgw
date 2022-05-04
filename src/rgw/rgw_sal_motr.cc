@@ -2567,8 +2567,8 @@ int MotrAtomicWriter::complete(size_t accounted_size, const std::string& etag,
   ent.meta.etag = etag;
   ent.meta.owner = owner.to_str();
   ent.meta.owner_display_name = obj.get_bucket()->get_owner()->get_display_name();
-  bool is_versioned = obj.get_key().have_instance();
-  if (is_versioned)
+  RGWBucketInfo &info = obj.get_bucket()->get_info();
+  if (info.versioning_enabled())
     ent.flags = rgw_bucket_dir_entry::FLAG_VER | rgw_bucket_dir_entry::FLAG_CURRENT;
   ldpp_dout(dpp, 20) <<__func__<< ": key=" << obj.get_key().to_str()
                     << " etag: " << etag << " user_data=" << user_data << dendl;
@@ -2576,7 +2576,6 @@ int MotrAtomicWriter::complete(size_t accounted_size, const std::string& etag,
     ent.meta.user_data = *user_data;
   ent.encode(bl);
 
-  RGWBucketInfo &info = obj.get_bucket()->get_info();
   if (info.obj_lock_enabled() && info.obj_lock.has_rule()) {
     auto iter = attrs.find(RGW_ATTR_OBJECT_RETENTION);
     if (iter == attrs.end()) {
@@ -2592,7 +2591,7 @@ int MotrAtomicWriter::complete(size_t accounted_size, const std::string& etag,
   obj.meta.encode(bl);
   ldpp_dout(dpp, 20) <<__func__<< ": lid=0x" << std::hex << obj.meta.layout_id
                                                            << dendl;
-  if (is_versioned) {
+  if (info.versioning_enabled()) {
     // get the list of all versioned objects with the same key and
     // unset their FLAG_CURRENT later, if do_idx_op_by_name() is successful.
     // Note: without distributed lock on the index - it is possible that 2
@@ -2620,10 +2619,12 @@ int MotrAtomicWriter::complete(size_t accounted_size, const std::string& etag,
   if (rc == 0)
     store->get_obj_meta_cache()->put(dpp, obj.get_key().to_str(), bl);
 
-  if (old_obj.get_bucket()->get_info().versioning_status() != BUCKET_VERSIONED) {
-    // Delete old object data if exists.
-    old_obj.delete_mobj(dpp);
-  }
+  if (rc == 0 && !info.versioning_enabled())
+      // Delete old object data if exists.
+      old_obj.delete_mobj(dpp);
+
+  if (rc != 0)
+    obj.delete_mobj(dpp);
 
   // TODO: We need to handle the object leak caused by parallel object upload by
   // making use of background gc, which is currently not enabled for motr.
@@ -3741,40 +3742,13 @@ int MotrStore::list_users(const DoutPrefixProvider* dpp, const std::string& meta
   return rc;
 }
 
-int MotrStore::open_idx(struct m0_uint128 *id, bool create, struct m0_idx *idx)
-{
-  m0_idx_init(idx, &container.co_realm, id);
-
-  if (!create)
-    return 0; // nothing to do more
-
-  // create index or make sure it's created
-  struct m0_op *op = nullptr;
-  int rc = m0_entity_create(nullptr, &idx->in_entity, &op);
-  if (rc != 0) {
-    ldout(cctx, 0) << "ERROR: m0_entity_create() failed: " << rc << dendl;
-    goto out;
-  }
-
-  m0_op_launch(&op, 1);
-  rc = m0_op_wait(op, M0_BITS(M0_OS_FAILED, M0_OS_STABLE), M0_TIME_NEVER) ?:
-       m0_rc(op);
-  m0_op_fini(op);
-  m0_op_free(op);
-
-  if (rc != 0 && rc != -EEXIST)
-    ldout(cctx, 0) << "ERROR: index create failed: " << rc << dendl;
-out:
-  return rc;
-}
-
 static void set_m0bufvec(struct m0_bufvec *bv, vector<uint8_t>& vec)
 {
   *bv->ov_buf = reinterpret_cast<char*>(vec.data());
   *bv->ov_vec.v_count = vec.size();
 }
 
-// idx must be opened with open_idx() beforehand
+// idx must be opened with open_motr_idx() beforehand
 int MotrStore::do_idx_op(struct m0_idx *idx, enum m0_idx_opcode opcode,
                          vector<uint8_t>& key, vector<uint8_t>& val, bool update)
 {
