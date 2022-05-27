@@ -1789,8 +1789,7 @@ MotrAtomicWriter::MotrAtomicWriter(const DoutPrefixProvider *dpp,
               ptail_placement_rule(_ptail_placement_rule),
               olh_epoch(_olh_epoch),
               unique_tag(_unique_tag),
-              obj(_store, _head_obj->get_key(), _head_obj->get_bucket()),
-              old_obj(_store, _head_obj->get_key(), _head_obj->get_bucket()) {}
+              obj(_store, _head_obj->get_key(), _head_obj->get_bucket()) {}
 
 static const unsigned MAX_BUFVEC_NR = 256;
 
@@ -2521,7 +2520,6 @@ void MotrAtomicWriter::cleanup()
   m0_bufvec_free2(&buf);
   acc_data.clear();
   obj.close_mobj();
-  old_obj.close_mobj();
 }
 
 unsigned MotrAtomicWriter::populate_bvec(unsigned len, bufferlist::iterator &bi)
@@ -2756,14 +2754,14 @@ int MotrAtomicWriter::complete(size_t accounted_size, const std::string& etag,
       			obj_type = "multipart object";
       			old_mobj->set_category(RGWObjCategory::MultiMeta);
     		}
-    	ldpp_dout(dpp, 20) << "MotrAtomicWriter::complete(): Old " << obj_type << " exists" << dendl;
+    	ldpp_dout(dpp, 20) <<__func__<< ": Old " << obj_type << " exists" << dendl;
     	// Delete old object
     	rc = old_mobj->delete_object(dpp, NULL, y, true);
 	if (rc == 0) {
-      		ldpp_dout(dpp, 20) << "MotrAtomicWriter::complete(): Old " << obj_type << " ["
+      		ldpp_dout(dpp, 20) <<__func__<< ": Old " << obj_type << " ["
           	<< old_mobj->get_name() <<  "] deleted succesfully" << dendl;
     	} else {
-      		ldpp_dout(dpp, 0) << "MotrAtomicWriter::complete(): Failed to delete old " << obj_type << " ["
+      		ldpp_dout(dpp, 0) << __func__<<": Failed to delete old " << obj_type << " ["
           	<< old_mobj->get_name() <<  "]. Error = " << rc << dendl;
       		return rc;
     	}
