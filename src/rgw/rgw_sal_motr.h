@@ -627,6 +627,8 @@ class MotrObject : public Object {
     virtual int get_obj_state(const DoutPrefixProvider* dpp, RGWObjectCtx* rctx, RGWObjState **state, optional_yield y, bool follow_olh = true) override;
     virtual int set_obj_attrs(const DoutPrefixProvider* dpp, RGWObjectCtx* rctx, Attrs* setattrs, Attrs* delattrs, optional_yield y, rgw_obj* target_obj = NULL) override;
     virtual int get_obj_attrs(RGWObjectCtx* rctx, optional_yield y, const DoutPrefixProvider* dpp, rgw_obj* target_obj = NULL) override;
+    virtual void read_bucket_info(const DoutPrefixProvider* dpp, std::string& bname, std::string& key, rgw_obj* target_obj = NULL);
+    virtual int read_obj_attrs(const DoutPrefixProvider* dpp, std::string& bname, std::string& key, bufferlist& bl, rgw_obj* target_obj = NULL);
     virtual int modify_obj_attrs(RGWObjectCtx* rctx, const char* attr_name, bufferlist& attr_val, optional_yield y, const DoutPrefixProvider* dpp) override;
     virtual int delete_obj_attrs(const DoutPrefixProvider* dpp, RGWObjectCtx* rctx, const char* attr_name, optional_yield y) override;
     virtual bool is_expired() override;
@@ -691,7 +693,10 @@ class MotrObject : public Object {
     int delete_part_objs(const DoutPrefixProvider* dpp);
     void set_category(RGWObjCategory _category) {category = _category;}
     int get_bucket_dir_ent(const DoutPrefixProvider *dpp, rgw_bucket_dir_entry& ent);
-    int update_version_entries(const DoutPrefixProvider *dpp);
+    int fetch_null_obj(const DoutPrefixProvider *dpp, bufferlist& bl);
+    int fetch_null_obj_reference(const DoutPrefixProvider *dpp, std::string& prev_null_obj_key);
+    int update_null_reference(const DoutPrefixProvider *dpp, rgw_bucket_dir_entry& ent);
+    int update_version_entries(const DoutPrefixProvider *dpp, bool set_is_latest=false);
     uint64_t get_processed_bytes() { return processed_bytes; }
 };
 
@@ -900,7 +905,7 @@ public:
 			  const rgw_placement_rule *ptail_placement_rule,
 			  uint64_t part_num,
 			  const std::string& part_num_str) override;
-  int delete_parts(const DoutPrefixProvider *dpp);
+  int delete_parts(const DoutPrefixProvider *dpp, std::string version_id="");
 };
 
 class MotrStore : public Store {
