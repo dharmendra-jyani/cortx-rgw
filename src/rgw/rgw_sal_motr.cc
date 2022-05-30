@@ -2735,7 +2735,6 @@ int MotrAtomicWriter::complete(size_t accounted_size, const std::string& etag,
   if( !info.versioning_enabled() )
   {
 	std::string obj_type = "simple object";
-        MotrObject::Meta old_meta;
   	rgw_bucket_dir_entry old_ent;
   	bufferlist old_check_bl;	
 	// Before updating bucket index with entry for new object, check if
@@ -2745,9 +2744,6 @@ int MotrAtomicWriter::complete(size_t accounted_size, const std::string& etag,
   	if (rc == 0 && old_check_bl.length() > 0) {
     		auto ent_iter = old_check_bl.cbegin();
     		old_ent.decode(ent_iter);
-    		rgw::sal::Attrs dummy;
-    		decode(dummy, ent_iter);
-    		old_meta.decode(ent_iter);
     		std::unique_ptr<rgw::sal::Object> old_obj = obj.get_bucket()->get_object(rgw_obj_key(obj.get_name()));
     		rgw::sal::MotrObject *old_mobj = static_cast<rgw::sal::MotrObject *>(old_obj.get());
     		if (old_ent.meta.category == RGWObjCategory::MultiMeta) {
@@ -2756,6 +2752,8 @@ int MotrAtomicWriter::complete(size_t accounted_size, const std::string& etag,
     		}
     	ldpp_dout(dpp, 20) <<__func__<< ": Old " << obj_type << " exists" << dendl;
     	// Delete old object
+	// Initialize version of the previous object so that it can delete a specific version,rather than delete the latest object.
+	// TODO: This will be taken care during version implementation.
     	rc = old_mobj->delete_object(dpp, NULL, y, true);
 	if (rc == 0) {
       		ldpp_dout(dpp, 20) <<__func__<< ": Old " << obj_type << " ["
@@ -2763,7 +2761,7 @@ int MotrAtomicWriter::complete(size_t accounted_size, const std::string& etag,
     	} else {
       		ldpp_dout(dpp, 0) << __func__<<": Failed to delete old " << obj_type << " ["
           	<< old_mobj->get_name() <<  "]. Error = " << rc << dendl;
-      		return rc;
+                // TODO: This will be handled during GC
     	}
   	}
   }
